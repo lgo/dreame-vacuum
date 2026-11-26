@@ -832,11 +832,19 @@ class DreameVacuumDevice:
 
         return changed
 
+    def _keep_alive_eligible(self) -> bool:
+        """Check whether dock keep-alive should be enabled.
+
+        The MOVA P10 Pro Ultra can briefly step its mop pad motors while
+        docked and idle when KEEP_ALIVE is active. See GitHub issue #1628.
+        """
+        return self.capability.dock_status and (self.info is None or self.info.model != "mova.vacuum.r2491a")
+
     def _request_properties(self, properties: list[DreameVacuumProperty] = None) -> bool:
         """Request properties from the device."""
         if not properties:
             properties = self._default_properties
-            if not self._ready or (self.capability.loaded and not self.capability.dock_status):
+            if not self._ready or not self._keep_alive_eligible():
                 properties = [prop for prop in properties if prop is not DreameVacuumProperty.KEEP_ALIVE]
 
         property_list = []
@@ -1025,7 +1033,7 @@ class DreameVacuumDevice:
     def _keep_alive_changed(self, previous_keep_alive: Any = None) -> None:
         ## Latest generation vacuum app plugin uses this property to inform the device about app is visibile or not
         ## so that the device keeps its dock sensor values up to date, otherwise all dock sensors always report OK over the vacuum
-        if self.capability.dock_status and self.get_property(DreameVacuumProperty.KEEP_ALIVE) is not None:
+        if self._keep_alive_eligible() and self.get_property(DreameVacuumProperty.KEEP_ALIVE) is not None:
             if (
                 self.get_property(DreameVacuumProperty.KEEP_ALIVE) == 0
                 and self.status.state != DreameVacuumState.UPGRADING
@@ -2142,7 +2150,7 @@ class DreameVacuumDevice:
         if (
             self.device_connected
             and not self.disconnected
-            and self.capability.dock_status
+            and self._keep_alive_eligible()
             and self.get_property(DreameVacuumProperty.KEEP_ALIVE) is not None
             and (not self._protocol.dreame_cloud or self.get_property(DreameVacuumProperty.KEEP_ALIVE) >= 1)
         ):
@@ -2522,7 +2530,7 @@ class DreameVacuumDevice:
             if (
                 not self._ready
                 and self.device_connected
-                and self.capability.dock_status
+                and self._keep_alive_eligible()
                 and self.get_property(DreameVacuumProperty.KEEP_ALIVE) is None
             ):
                 self._request_properties([DreameVacuumProperty.KEEP_ALIVE])
